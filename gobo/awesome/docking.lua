@@ -6,6 +6,7 @@ local beautiful = require("beautiful")
 local mouse = mouse
 local screen = screen
 local mousegrabber = mousegrabber
+local timer = require("gears.timer") or timer
 
 local auto_tile = {}
 setmetatable(auto_tile, { __mode = "k" })
@@ -66,7 +67,66 @@ local function save_relative_geometry(c, geo, reference)
    end
 end
 
+local corner_fns = {
+}
+
+local function get_corner_fn(bottom, right)
+   local key = bottom.."-"..right
+   if not corner_fns[key] then
+      corner_fns[key] = function(c)
+         local area = screen[c.screen].workarea
+         undock_auto_tile(c)
+         c.maximized = false
+         c:geometry({
+            x = area.x + (right == "right" and (area.width / 2) or 0),
+            y = area.y + (bottom == "bottom" and (area.height / 2) or 0),
+            width = (area.width / 2) - (c.border_width * 2),
+            height = (area.height / 2) - (c.border_width * 2),
+         })
+      end
+   end
+   return corner_fns[key]
+end
+
+function docking.corner_key(bottom, right, mods, key)
+   local fn = get_corner_fn(bottom, right)
+   return awful.key(mods, key, fn, { description = "Arrange at "..bottom.."-"..right.." corner", group = "awesome gobolinux" })
+end
+
+local cornering = {
+   bottom = nil,
+   right = nil,
+   timer = nil
+}
+
+local function check_corner(c, bottom, right)
+   if cornering.timer then
+      if (cornering.bottom and not bottom) or (cornering.right and not right) then
+         cornering.timer:stop()
+         local fn = get_corner_fn(cornering.bottom or bottom, cornering.right or right)
+         cornering.timer = nil
+         cornering.right = nil
+         cornering.bottom = nil
+         fn(c)
+         return true
+      end
+   else
+      cornering.timer = timer({timeout = 0.2})
+      cornering.right = right
+      cornering.bottom = bottom
+      cornering.timer:connect_signal("timeout", function()
+         cornering.timer = nil
+         cornering.right = nil
+         cornering.bottom = nil
+      end)
+      cornering.timer:start()
+   end
+end
+
 function docking.dock_left(c)
+   if check_corner(c, nil, "left") then
+      return
+   end
    local curr = c:geometry()
    local area = screen[c.screen].workarea
    local s_area = area
@@ -101,6 +161,9 @@ function docking.dock_left(c)
 end
 
 function docking.dock_right(c)
+   if check_corner(c, nil, "right") then
+      return
+   end
    local area = screen[c.screen].workarea
    local s_area = area
    local half = math.floor(area.width / 2)
@@ -135,6 +198,9 @@ function docking.dock_right(c)
 end
 
 function docking.dock_up(c)
+   if check_corner(c, "top", nil) then
+      return
+   end
    local area = screen[c.screen].workarea
    local half = math.floor(area.height / 2)
    local curr = c:geometry()
@@ -160,6 +226,9 @@ function docking.dock_up(c)
 end
 
 function docking.dock_down(c)
+   if check_corner(c, "bottom", nil) then
+      return
+   end
    c.maximized = false
    local area = screen[c.screen].workarea
    local half = math.floor(area.height / 2)
@@ -190,21 +259,6 @@ function docking.dock_down(c)
       awful.placement.no_offscreen(c)
       undock_auto_tile(c)
    end
-end
-
-function docking.corner_key(bottom, right, mods, key)
-   local fn = function(c)
-      local area = screen[c.screen].workarea
-      undock_auto_tile(c)
-      c.maximized = false
-      c:geometry({
-         x = area.x + (right == "right" and (area.width / 2) or 0),
-         y = area.y + (bottom == "bottom" and (area.height / 2) or 0),
-         width = (area.width / 2) - (c.border_width * 2),
-         height = (area.height / 2) - (c.border_width * 2),
-      })
-   end
-   return awful.key(mods, key, fn, { description = "Arrange at "..bottom.."-"..right.." corner", group = "awesome gobolinux" })
 end
 
 function docking.smart_mouse_move(c)
