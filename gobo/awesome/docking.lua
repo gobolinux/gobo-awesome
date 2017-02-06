@@ -139,13 +139,14 @@ function docking.dock_left(c)
       local maxd = c.maximized
       if (maxd or (curr.x == area.x and curr.y == area.y)) and area.x > 0 then
          local nextscreen = awful.screen.getbycoord(area.x - 1, area.y)
-         area = screen[nextscreen].workarea
          if maxd then
+            area = screen[nextscreen].workarea
             half = area.width
             offset = 0
             mode = "up"
             c.screen = nextscreen
-         else
+         elseif auto_tile[c] and auto_tile[c].mode == "left" then
+            area = screen[nextscreen].workarea
             half = math.floor(area.width / 2)
             offset = half
             mode = "right"
@@ -174,7 +175,7 @@ function docking.dock_right(c)
       local mode = "right"
       local nextscreen = awful.screen.getbycoord(area.x + area.width, area.y, -1)
       local maxd = c.maximized
-      if (maxd or (curr.x == area.x + half and curr.y == area.y)) and nextscreen ~= -1 then
+      if (maxd or (curr.x == area.x + half and curr.y == area.y)) and nextscreen ~= c.screen.index then
          area = screen[nextscreen].workarea
          if maxd then
             half = area.width
