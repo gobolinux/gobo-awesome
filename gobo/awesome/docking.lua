@@ -16,6 +16,33 @@ local function undock_auto_tile(c)
    auto_tile[c] = nil
 end
 
+function docking.tween(c, new, maximize)
+   local old = c:geometry()
+   local my_timer = timer({timeout = 1/60})
+   local delta = {}
+   local frame = {}
+   local nframes = 5
+   for k,v in pairs(new) do
+      delta[k] = ((v - old[k]) / nframes)
+      frame[k] = old[k]
+   end
+   local curr = 0
+   my_timer:connect_signal("timeout", function()
+      for k, v in pairs(frame) do
+         frame[k] = v + delta[k]
+      end
+      c:geometry(frame)
+      curr = curr + 1
+      if curr == nframes then
+         if maximize then
+            c.maximized = true
+         end
+         my_timer:stop()
+      end
+   end)
+   my_timer:start()
+end
+
 function docking.move_key(orient, delta, mods, key)
    local size, pos, upleft, downright
    if orient == "vertical" then
@@ -28,12 +55,12 @@ function docking.move_key(orient, delta, mods, key)
       if auto_tile[c] then
          local mode = auto_tile[c].mode
          if mode == upleft then
-            c:geometry({ [size] = curr[size] + delta })
+            docking.tween(c, { [size] = curr[size] + delta })
          elseif mode == downright then
-            c:geometry({ [size] = curr[size] - delta, [pos] = curr[pos] + delta })
+            docking.tween(c, { [size] = curr[size] - delta, [pos] = curr[pos] + delta })
          end
       else
-         c:geometry({ [pos] = curr[pos] + delta })
+         docking.tween(c, { [pos] = curr[pos] + delta })
       end
    end
    return awful.key(mods, key, fn, { description = "Move floating window", group = "awesome gobolinux" })
@@ -49,7 +76,7 @@ function docking.resize_key(orient, delta, mods, key)
    local fn = function(c)
       local curr = c:geometry()
       if not auto_tile[c] then
-         c:geometry({ [size] = curr[size] + delta })
+         docking.tween(c, { [size] = curr[size] + delta })
       end
    end
    return awful.key(mods, key, fn, { description = "Resize floating window", group = "awesome gobolinux" })
@@ -77,7 +104,7 @@ local function get_corner_fn(bottom, right)
          local area = screen[c.screen].workarea
          undock_auto_tile(c)
          c.maximized = false
-         c:geometry({
+         docking.tween(c, {
             x = area.x + (right == "right" and (area.width / 2) or 0),
             y = area.y + (bottom == "bottom" and (area.height / 2) or 0),
             width = (area.width / 2) - (c.border_width * 2),
@@ -154,7 +181,7 @@ function docking.dock_left(c)
       else
          c.maximized = false
       end
-      c:geometry({ x = area.x + offset,
+      docking.tween(c, { x = area.x + offset,
          y = area.y,
          width = half,
          height = area.height
@@ -190,7 +217,7 @@ function docking.dock_right(c)
       else
          c.maximized = false
       end
-      c:geometry({ x = area.x + half - offset,
+      docking.tween(c, { x = area.x + half - offset,
          y = area.y,
          width = half,
          height = area.height
@@ -209,18 +236,17 @@ function docking.dock_up(c)
       local tophalf = (curr.x == area.x and curr.y == area.y and math.abs(curr.height - half) < 20)
       if c.maximized or (not tophalf) then
          c.maximized = false
-         c:geometry({ x = area.x,
+         docking.tween(c, { x = area.x,
             y = area.y,
             width = area.width,
             height = half,
          })
       elseif tophalf then
-         c.maximized = true
-         c:geometry({ x = area.x,
+         docking.tween(c, { x = area.x,
             y = area.y,
             width = area.width,
             height = area.height,
-         })
+         }, true)
       end
       save_relative_geometry(c, curr, area)
       auto_tile[c].mode = "up"
@@ -235,7 +261,7 @@ function docking.dock_down(c)
       local half = math.floor(area.height / 2)
       local curr = c:geometry()
       if curr.y ~= area.y + half then
-         c:geometry({ x = area.x,
+         docking.tween(c, { x = area.x,
             y = area.y + half,
             width = area.width,
             height = half,
@@ -256,7 +282,7 @@ function docking.dock_down(c)
             old.x = old.x + area.x
             old.y = old.y + area.y
          end
-         c:geometry(old)
+         docking.tween(c, old)
          awful.placement.no_offscreen(c)
          undock_auto_tile(c)
       end
@@ -272,7 +298,7 @@ function docking.smart_mouse_move(c)
                local ms = mouse.screen
                if mouse.screen ~= c.screen then
                   c.screen = ms
-                  c:geometry(screen[ms].workarea)
+                  docking.tween(c, screen[ms].workarea)
                end
                return true
             end
